@@ -58,10 +58,10 @@ const int DEFAULT_A=-2147483640;
 
 inline int argb(int r,int g=DEFAULT_G,int b=DEFAULT_B,int a=0){
     if(a<0||a>0xff)
-        throw "a must be in [0x00,0xff]";
+        throw ".argb: a must be in [0x00,0xff]";
     if(g==DEFAULT_G&&b==DEFAULT_B){
         if(r<0||r>0xffffff)
-            throw "rgb must be in [0x000000,0xffffff]";
+            throw ".argb: rgb must be in [0x000000,0xffffff]";
         if(!a)
             return r;
         b=r&0xff;
@@ -69,7 +69,7 @@ inline int argb(int r,int g=DEFAULT_G,int b=DEFAULT_B,int a=0){
         r=r>>16;
     }else{
         if(r<0||r>0xff||g<0||g>0xff||b<0||b>0xff)
-            throw "r,g,b must be in [0x00,0xff]";
+            throw ".argb: r,g,b must be in [0x00,0xff]";
     }
     if(a){
         r+=a-(r*a+127)/255;
@@ -79,18 +79,47 @@ inline int argb(int r,int g=DEFAULT_G,int b=DEFAULT_B,int a=0){
     return r<<16|g<<8|b;
 }
 
-inline std::string bmp(std::string pth,int resizex=0,int resizey=0,std::string ext="original"){
+inline int distance(int l,int r){
+    if(l<0||l>0xffffff||r<0||r>0xffffff)
+        throw ".distance: l or r out of range";
+    l^=r;
+    return (l>>16)+((l>>8)&0xff)+(l&0xff);
+}
+
+
+inline int isbmp(std::string pth){
+    if(pth.size()<4)
+        return 0;
+    if(pth[pth.size()-4]!='.')
+        return 0;
+    if(pth[pth.size()-3]!='b')
+        return 0;
+    if(pth[pth.size()-2]!='m')
+        return 0;
+    if(pth[pth.size()-1]!='p')
+        return 0;
+    return 1;
+}
+
+inline std::string bmp(std::string pth,int resizex=0,int resizey=0){
+    FILE*f=fopen(pth,"rb");
+    if(!f)
+        throw ".bmp: file not found";
+    fclose(f);
+
+    if(isbmp(pth))return pth;
+    int flg=resizex&&resizey;
+    if(!flg&&(resizex||resizey))
+        throw ".bmp: resizex and resizey must be both 0 or both not 0";
+
     std::string rx=std::to_string(resizex),ry=std::to_string(resizey);
-    std::string p2=pth+"."+((resizex|resizey)?rx+"x"+ry:ext)+".bmp";
-    std::string s="ffmpeg -y -i \""+pth+"\" "+((resizex|resizey)?"-vf scale="+rx+":"+ry+" ":"")+"\""+p2+"\" 1>nul 2>&1";
-    system(s.c_str());
+    std::string p2=pth+(flg?"."+rx+"x"+ry:"")+".bmp";
+    std::string cmd="ffmpeg -y -i \""+pth+"\" "+(flg?"-vf scale="+rx+":"+ry+" ":"")+"\""+p2+"\" 1>nul 2>&1";
+    system(cmd.c_str());
 
     return p2;
 }
 
-inline std::string bmp(std::string pth,std::string ext){
-    return bmp(pth,0,0,ext);
-}
 
 class BMPrgb24{
 private:
@@ -125,14 +154,6 @@ public:
         const LL bfSize=biSizeImage+BMPRGB24_bfOffBits;
 
         auto _sethead=[this](LL reg,int l,int r){while(l<r)this->head[l++]=reg&0xff,reg>>=8;};
-
-        // inline void _sethead(LL reg,int l,int r){
-        //     for(int i=l;i<r;i++){
-        //         head[i]=reg&0xff;
-        //         reg>>=8;
-        //     }
-        // }
-
         _sethead(bfSize,0x02,0x06);
         _sethead(xy,0x12,0x1a);
         _sethead(biSizeImage,0x22,0x26);
@@ -140,10 +161,12 @@ public:
         renew();
     }
 
-    BMPrgb24(std::string path){
-        FILE*f=fopen(path.c_str(),"rb");
+    BMPrgb24(std::string pth,int x=0,int y=0){
+        FILE*f=fopen(bmp(pth,x,y).c_str(),"rb");
+        if(!f)
+            throw "BMPrgb24: file not found";
         const int code=read(f);
-        if(code)printf("Warning: %d \"%s\"\n",code,path.c_str());
+        if(code)printf("Warning: %d \"%s\"\n",code,pth.c_str());
         fclose(f);
     }
 
@@ -170,9 +193,6 @@ public:
         if(fread(head,1,BMPRGB24_bfOffBits,f)^BMPRGB24_bfOffBits)
             throw "BMPrgb24.read: file.size < 0x36";
         B*_p=head;
-        // inline int _n(){return *_p++;}
-        // inline int _n2(){return _n()|_n()<<8;}
-        // inline int _n4(){return _n2()|_n2()<<16;}
         auto _n=[&_p](){return *_p++;};
         auto _n2=[&_n](){return _n()|_n()<<8;};
         auto _n4=[&_n2](){return _n2()|_n2()<<16;};
@@ -268,8 +288,8 @@ public:
         return 0;
     }
 
-    inline int save(std::string pth,int compress=0){
-        FILE*f=fopen((compress?pth+".bmp":pth).c_str(),"wb");
+    inline int save(std::string pth){
+        FILE*f=fopen((isbmp(pth)?pth:pth+".bmp").c_str(),"wb");
         const int width3=width+(width<<1);
         const int mo=width&3;
         B*_p=(B*)malloc(4);
@@ -280,7 +300,7 @@ public:
             fwrite(_p,1,mo,f);
         }
         fclose(f);
-        if(!compress)return 0;
+        if(isbmp(pth))return 0;
         
         std::string s="ffmpeg -y -f bmp_pipe -i \""+pth+".bmp\" \""+pth+"\" 1>nul 2>&1";
         system(s.c_str());
@@ -682,10 +702,3 @@ public:
         return img;
     }
 };
-
-inline int distance(int l,int r){
-    if(l<0||l>0xffffff||r<0||r>0xffffff)
-        throw "distance: l or r out of range";
-    l^=r;
-    return (l>>16)+((l>>8)&0xff)+(l&0xff);
-}
