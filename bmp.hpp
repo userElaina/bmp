@@ -102,7 +102,7 @@ inline int isbmp(std::string pth){
 }
 
 inline std::string bmp(std::string pth,int resizex=0,int resizey=0){
-    FILE*f=fopen(pth,"rb");
+    FILE*f=fopen(pth.c_str(),"rb");
     if(!f)
         throw ".bmp: file not found";
     fclose(f);
