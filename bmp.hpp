@@ -130,7 +130,8 @@ public:
     B*o=NULL;
     int*tag=NULL;
     int lastag=0;
-    std::string read_path="",write_path="",save_path="";
+    std::string read_path="",write_path=""; // must be BMP
+    std::string origin_path="",save_path="";// can be PNG or others
 
     B head[BMPRGB24_bfOffBits]={
 //         0,   1,   2,   3,       4,   5,   6,   7,       8,   9,   A,   B,       C,   D,   E,   F
@@ -163,8 +164,9 @@ public:
     }
 
     BMPrgb24(std::string pth,int x=0,int y=0){
-        read_path=pth;
-        FILE*f=fopen(bmp(pth,x,y).c_str(),"rb");
+        origin_path=pth;
+        read_path=bmp(pth,x,y);
+        FILE*f=fopen(read_path.c_str(),"rb");
         if(!f)
             throw "BMPrgb24: file not found";
         const int code=read(f);
