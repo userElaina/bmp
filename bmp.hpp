@@ -130,6 +130,7 @@ public:
     B*o=NULL;
     int*tag=NULL;
     int lastag=0;
+    std::string read_path="",write_path="",save_path="";
 
     B head[BMPRGB24_bfOffBits]={
 //         0,   1,   2,   3,       4,   5,   6,   7,       8,   9,   A,   B,       C,   D,   E,   F
@@ -162,6 +163,7 @@ public:
     }
 
     BMPrgb24(std::string pth,int x=0,int y=0){
+        read_path=pth;
         FILE*f=fopen(bmp(pth,x,y).c_str(),"rb");
         if(!f)
             throw "BMPrgb24: file not found";
@@ -288,8 +290,19 @@ public:
         return 0;
     }
 
-    inline int save(std::string pth){
-        FILE*f=fopen((isbmp(pth)?pth:pth+".bmp").c_str(),"wb");
+    inline int save(std::string pth=""){
+        if(pth.empty()){
+            printf("BMPrgb24.save: File '%s' already exists. Overwrite? [y/N]",read_path.c_str());
+            if(gt()^'y'){
+                save_path="";
+                write_path="";
+                return 1;
+            }
+            pth=read_path;
+        }
+        save_path=pth;
+        write_path=isbmp(pth)?pth:pth+".bmp";
+        FILE*f=fopen(write_path.c_str(),"wb");
         const int width3=width+(width<<1);
         const int mo=width&3;
         B*_p=(B*)malloc(4);
